@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:1.21.6
+    restart: always
+    depends_on:
+      - app
+    ports:
+      - 8080:80 # 80:80 if production
+      # - 443:443       # production only
+    volumes:
+      # configuration files & directories
+      - ./_server/etc/nginx/conf.d:/etc/nginx/conf.d
+      - ./_server/etc/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./_server/var/log/nginx:/var/log/nginx
+      # source code
+      - ./l9app:/var/www/html
+      # runtime php-fpm socket
+      - ./_server/var/run/php:/var/run/php
+
+  app:
+    image: php-mysql:8.1.4-fpm
+    build:
+      context: .
+      dockerfile: ./php-mysql.Dockerfile
+    depends_on:
+      - db
+    entrypoint:
+      - php-fpm
+      - -n # --no-php-ini: No php.ini file will be used: https://linux.die.net/man/8/php-fpm
+      - -c # --php-ini: Look for php.ini file in the directory path or use the specified file: https://linux.die.net/man/8/php-fpm
+      - /etc/php/php.ini
+      - -y # --fpm-config: Specify alternative path to FastCGI process manager configuration file: https://linux.die.net/man/8/php-fpm
+      - /etc/php/php-fpm.conf
+    volumes:
+      # configuration files & directory
+      - ./_server/etc/php:/etc/php
+      # source code
+      - ./l9app:/var/www/html
+      # runtime php-fpm socket
+      - ./_server/var/run/php:/var/run/php
+    links:
+      - db
+
+  db:
+    # quick solution to run mysql on Mac M1
+    platform: linux/x86_64 # https://stackoverflow.com/questions/65456814/docker-apple-silicon-m1-preview-mysql-no-matching-manifest-for-linux-arm64-v8
+    image: mysql:8.0.28
+    restart: always
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    ports:
+      - 33060:3306
+    volumes:
+      - ./_server/var/lib/mysql:/var/lib/mysql
